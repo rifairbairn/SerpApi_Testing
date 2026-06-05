@@ -2,13 +2,29 @@ import logging
 import os
 from datetime import datetime
 
+import requests
+import urllib3
 from dotenv import load_dotenv
 
 """
 Need to add this to 'requests' library in 'utils.py' within 'select_proxy' function
 proxies = proxies or {"http":"http://lon3.sme.zscaler.net:443",
-                      "https":"http://lon3.sme.zscaler.net:443"}                    
+                      "https":"http://lon3.sme.zscaler.net:443"}
 """
+
+# Zscaler re-signs HTTPS traffic with its own CA, which Python doesn't trust by default.
+# Patch requests.Session so the serpapi library skips SSL verification.
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+_original_request = requests.Session.request
+
+
+def _unverified_request(self, method, url, **kwargs):
+    kwargs.setdefault("verify", False)
+    return _original_request(self, method, url, **kwargs)
+
+
+requests.Session.request = _unverified_request
+
 
 def run_news_search(query: str,
                     search_engine: str,
