@@ -4,7 +4,7 @@ import re
 import requests
 from dotenv import load_dotenv
 import json
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 # Load API key from the project .env file
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -306,6 +306,81 @@ class ChatGPTAnalyser:
         )
         return [item["query"] for item in query_records]
 
+    def score_article(self, company: str, title: str, snippet: str) -> Optional[Dict]:
+        """
+        Score a news article for relevance to a specific company and investment usefulness.
+
+        Uses few-shot examples to anchor scores consistently across different companies
+        and article types. Intended for the strategy test harness.
+
+        Returns dict with keys: subject, mentioned, relevance (0-100), usefulness (0-100).
+        """
+        FEW_SHOT = (
+            "Scoring examples - use these to calibrate your scores:\n\n"
+            "Example 1 - Company is primary subject, high investment signal:\n"
+            "Company: Acme Corp\n"
+            'Title: "Acme Corp Announces 500m Share Buyback Programme"\n'
+            'Snippet: "Acme Corp said it would repurchase up to 500 million of its own shares over the next '
+            '12 months, citing strong cash generation."\n'
+            '{"subject": "Yes", "mentioned": "Yes", "relevance": 95, "usefulness": 90}\n\n'
+            "Example 2 - Company is primary subject, routine/low signal:\n"
+            "Company: Acme Corp\n"
+            'Title: "Acme Corp Reports Q3 Earnings in Line With Expectations"\n'
+            'Snippet: "Acme Corp posted third-quarter net income of $1.2 billion, matching analyst forecasts. '
+            'Revenue rose 3% year-on-year."\n'
+            '{"subject": "Yes", "mentioned": "Yes", "relevance": 90, "usefulness": 30}\n\n'
+            "Example 3 - Company mentioned but not primary subject:\n"
+            "Company: Acme Corp\n"
+            'Title: "Global Banks Face Tougher Capital Rules, Analysts Say"\n'
+            'Snippet: "Regulators are considering stricter capital requirements. Firms including Acme Corp, '
+            'BankX and FinCo could be affected."\n'
+            '{"subject": "No", "mentioned": "Yes", "relevance": 20, "usefulness": 10}\n\n'
+            "Example 4 - Company not present:\n"
+            "Company: Acme Corp\n"
+            'Title: "Federal Reserve Signals Pause in Rate Hikes"\n'
+            'Snippet: "The Federal Reserve indicated it may hold interest rates steady as inflation eases."\n'
+            '{"subject": "No", "mentioned": "No", "relevance": 0, "usefulness": 0}\n\n'
+            "Example 5 - Primary subject, high-signal negative event:\n"
+            "Company: Acme Corp\n"
+            'Title: "Acme Corp Under Investigation for Accounting Irregularities"\n'
+            'Snippet: "Regulators have opened a formal investigation into Acme Corp following allegations '
+            'of overstated revenues in its 2023 annual report."\n'
+            '{"subject": "Yes", "mentioned": "Yes", "relevance": 95, "usefulness": 85}\n'
+        )
+
+        prompt = (
+            "You are scoring financial news articles for investment relevance.\n\n"
+            f"{FEW_SHOT}\n"
+            "Now score this article:\n\n"
+            f"Company: {company}\n"
+            f"Title: {title}\n"
+            f"Snippet: {snippet}\n\n"
+            "Definitions:\n"
+            f"- subject: Is '{company}' the PRIMARY subject? (Yes/No)\n"
+            f"- mentioned: Is '{company}' mentioned at all? (Yes/No)\n"
+            f"- relevance (0-100): How focused is the article on {company}?\n"
+            "  0=not mentioned, 20=mentioned among many, 50=one of several subjects, 90+=primary focus\n"
+            "- usefulness (0-100): Investment value of the information:\n"
+            "  High (70-100): M&A, fraud/legal issues, dividend changes, buybacks, debt issuance,\n"
+            "    major contracts, significant executive changes\n"
+            "  Medium (30-69): Guidance updates, analyst rating changes, strategic announcements\n"
+            "  Low (0-29): Routine in-line earnings, minor price moves, general sector commentary\n\n"
+            "Return ONLY valid JSON: "
+            '{"subject": "Yes"|"No", "mentioned": "Yes"|"No", "relevance": <0-100>, "usefulness": <0-100>}'
+        )
+
+        try:
+            chatgpt_output = self._request_chat_completion(prompt)
+            if not chatgpt_output:
+                return None
+            return self._parse_json_response(chatgpt_output)
+        except json.JSONDecodeError as e:
+            logging.error("JSON parsing error in score_article: %s", e)
+            return None
+        except Exception as e:
+            logging.error("Unexpected error in score_article: %s", e)
+            return None
+
     def analyse_article_buybacks(self, company_name: str, title: str, snippet: str):
         """
         Analyzes article to determine if it's about the company and mentions buyback/repurchase plans.
@@ -336,7 +411,7 @@ class ChatGPTAnalyser:
                 f"   - Answer 'No' if only other companies are doing buybacks.\n"
                 f"   - Focus on NEW announcements or plans, not historical buybacks already completed.\n"
                 f"3. **If the target company has a buyback amount mentioned, extract:**\n"
-                f"   - The announced amount as a full number (e.g., '$25 billion' = 25000000000, '€500m' = 500000000)\n"
+                f"   - The announced amount as a full number (e.g., '$25 billion' = 25000000000, 'EUR500m' = 500000000)\n"
                 f"   - The currency in ISO 4217 format (e.g., 'USD', 'EUR', 'GBP', 'JPY')\n"
                 f"   - If no specific amount OR buyback is for a different company, set both to null\n\n"
                 f"### Expected JSON Response:\n"
