@@ -211,7 +211,7 @@ class ChatGPTAnalyser:
                 f"Primary company name: {company_name}\n"
                 f"Existing aliases / identifiers: {existing_names}\n\n"
 
-                "Consider each of the following 7 formulation types and produce one candidate "
+                "Consider each of the following 8 formulation types and produce one candidate "
                 "per type where it applies. Then return the best 5 that are most likely to "
                 "retrieve relevant financial news.\n\n"
 
@@ -222,7 +222,9 @@ class ChatGPTAnalyser:
                 "4. Exchange code or ticker: e.g. IDX: AADI\n"
                 "5. Common abbreviation/acronym in quotes with context: e.g. \"Adaro\" mining\n"
                 "6. Local-language name (if company is non-English and has one): e.g. native script name\n"
-                "7. Parent or brand name with disambiguation context if the short name is ambiguous\n\n"
+                "7. Parent or brand name with disambiguation context if the short name is ambiguous\n"
+                "8. Former or previous name if the company has rebranded or renamed in recent years "
+                "(e.g. pre-rebrand name still appears heavily in news)\n\n"
 
                 "Hard rules:\n"
                 "- Do NOT append generic words like 'stock', 'shares', 'price', 'chart' to any query.\n"
