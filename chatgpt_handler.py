@@ -82,16 +82,18 @@ class ChatGPTAnalyser:
     It determines if a company is the subject, assigns a relevance score, and measures usefulness.
     """
 
-    def __init__(self, model="gpt-4o-mini"):
+    def __init__(self, model="gpt-4o-mini", scoring_model: str | None = None):
         """
         Initializes the ChatGPTAnalyser class with API credentials and optional proxy settings.
 
         :param api_key: OpenAI API key.
         :param proxy: Proxy URL (e.g., "http://your.proxy.server:8080") or None.
-        :param model: The OpenAI model to use.
+        :param model: The OpenAI model to use for name suggestions.
+        :param scoring_model: The OpenAI model to use for article scoring (defaults to model).
         """
         self.api_key = OPENAI_API_KEY
         self.model = model
+        self.scoring_model = scoring_model or model
 
         # Configure proxy settings
         self.proxies = {
@@ -104,13 +106,13 @@ class ChatGPTAnalyser:
         logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
         logging.info("ChatGPTAnalyser initialized.")
 
-    def _request_chat_completion(self, prompt):
+    def _request_chat_completion(self, prompt, model: str | None = None):
         try:
             response = requests.post(
                 "https://api.openai.com/v1/chat/completions",
                 headers={"Authorization": f"Bearer {self.api_key}"},
                 json={
-                    "model": self.model,
+                    "model": model or self.model,
                     "messages": [{"role": "user", "content": prompt}]
                 },
                 proxies=self.proxies,
@@ -377,7 +379,7 @@ class ChatGPTAnalyser:
         )
 
         try:
-            chatgpt_output = self._request_chat_completion(prompt)
+            chatgpt_output = self._request_chat_completion(prompt, model=self.scoring_model)
             if not chatgpt_output:
                 return None
             return self._parse_json_response(chatgpt_output)
