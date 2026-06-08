@@ -47,7 +47,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 
 DATABASE = "RothkoFO"
 TICKER = "MS664220"
-MAX_COMPANIES = 50
+MAX_COMPANIES = 2 #50
 MAX_GPT_TARGET_CANDIDATES = 5
 TOP_N_RESULTS = 25          # results to score per query (1 credit = 100 results fetched)
 SEARCH_ENGINE = "google"
