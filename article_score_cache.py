@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Dict, Optional
+from urllib.parse import urlparse, urlunparse
 
 import pandas as pd
 
@@ -16,8 +17,17 @@ SCORE_CACHE_COLUMNS = [
 ]
 
 
+def _strip_query(url: str) -> str:
+    """Return URL with query string and fragment removed, lowercased."""
+    try:
+        p = urlparse(url.strip())
+        return urlunparse((p.scheme, p.netloc, p.path, "", "", "")).lower()
+    except Exception:
+        return url.strip().lower()
+
+
 def _make_key(url: str, company_name: str) -> str:
-    return f"{url.strip().lower()}|||{company_name.strip().lower()}"
+    return f"{_strip_query(url)}|||{company_name.strip().lower()}"
 
 
 def load_score_cache(cache_path: str | Path) -> pd.DataFrame:
@@ -38,11 +48,8 @@ def save_score_cache(df: pd.DataFrame, cache_path: str | Path) -> None:
 
 
 def _key_series(df: pd.DataFrame) -> pd.Series:
-    return (
-        df["URL"].fillna("").str.strip().str.lower()
-        + "|||"
-        + df["CompanyName"].fillna("").str.strip().str.lower()
-    )
+    stripped = df["URL"].fillna("").apply(lambda u: _strip_query(u) if u else "")
+    return stripped + "|||" + df["CompanyName"].fillna("").str.strip().str.lower()
 
 
 def get_cached_score(

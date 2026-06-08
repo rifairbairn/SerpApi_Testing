@@ -118,7 +118,7 @@ def _quote(value: str) -> str:
         return ""
     if cleaned.startswith('"') and cleaned.endswith('"'):
         return cleaned
-    return f'"{cleaned.replace(chr(34), "")}"'
+    return f'"{ cleaned.replace(chr(34), "")}"'
 
 
 def _dedupe_candidates(
@@ -262,7 +262,7 @@ def main() -> int:
     score_cache = load_score_cache(score_cache_path)
 
     db = DatabaseHandler(DATABASE)
-    analyser = ChatGPTAnalyser()
+    analyser = ChatGPTAnalyser(model="gpt-4o-mini", scoring_model="gpt-5-mini")
 
     positions = db.get_index_positions(TICKER, POS_DATE)
     if positions is None or positions.empty:
