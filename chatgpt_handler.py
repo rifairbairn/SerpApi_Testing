@@ -211,35 +211,40 @@ class ChatGPTAnalyser:
                 f"Primary company name: {company_name}\n"
                 f"Existing aliases / identifiers: {existing_names}\n\n"
 
-                "Generate distinct search formulations likely to appear in financial news headlines, "
-                "snippets, filings, and press releases.\n\n"
+                "Consider each of the following 7 formulation types and produce one candidate "
+                "per type where it applies. Then return the best 5 that are most likely to "
+                "retrieve relevant financial news.\n\n"
 
-                "Possible formulation types:\n"
-                "- official company name in quotes\n"
-                "- official company name without quotes\n"
-                "- short/common company name\n"
-                "- company name with ticker or exchange\n"
-                "- abbreviation/acronym if commonly used\n"
-                "- partially quoted company name with contextual disambiguation\n"
-                "- local-language company name if relevant\n\n"
+                "Formulation types:\n"
+                "1. Full official name in quotes: e.g. \"Pt Adaro Andalan Indonesia Tbk\"\n"
+                "2. Full official name without quotes: e.g. Pt Adaro Andalan Indonesia Tbk\n"
+                "3. Short/common name in quotes with brief context outside: e.g. \"Adaro Andalan\" Indonesia\n"
+                "4. Exchange code or ticker: e.g. IDX: AADI\n"
+                "5. Common abbreviation/acronym in quotes with context: e.g. \"Adaro\" mining\n"
+                "6. Local-language name (if company is non-English and has one): e.g. native script name\n"
+                "7. Parent or brand name with disambiguation context if the short name is ambiguous\n\n"
 
-                "Guidelines:\n"
-                "- Use quotes only when they improve precision.\n"
-                "- For ambiguous names, prefer partial quoting with context.\n"
-                "- Example: '\"Continental\" german tyres'\n"
-                "- Avoid duplicate or near-duplicate queries.\n"
-                "- Avoid excessively restrictive long quoted phrases.\n"
-                "- Avoid overly generic one-word queries unless distinctive.\n"
-                "- Prefer formulations likely to appear naturally in financial news.\n\n"
+                "Hard rules:\n"
+                "- Do NOT append generic words like 'stock', 'shares', 'price', 'chart' to any query.\n"
+                "- Do NOT include time-specific terms like 'Q2', 'Q3', 'FY26', '2025' in any query.\n"
+                "- Quoted phrases must be short — maximum 4 words inside quotes.\n"
+                "- Avoid near-duplicate queries (e.g. do not return both quoted and unquoted full name "
+                "if the name is unambiguous).\n"
+                "- Skip a type if it does not apply (e.g. no local-language name for English companies).\n\n"
+
+                "Good examples:\n"
+                "  \"Adaro Andalan\" Indonesia\n"
+                "  IDX: AADI\n"
+                "  \"UltraTech Cement Limited\"\n"
+                "  NSE: ULTRACEMCO\n"
+                "  \"UltraTech\" cement India\n\n"
 
                 "Return ONLY valid JSON:\n"
                 "{\n"
-                '  "queries": [\n'
-                '    "\\"Continental\\" german tyres"\n'
-                "  ]\n"
+                '  "queries": ["query1", "query2", ...]\n'
                 "}\n\n"
 
-                f"Return no more than {max_names} queries."
+                f"Return exactly {max_names} queries."
             )
 
             chatgpt_output = self._request_chat_completion(prompt)
