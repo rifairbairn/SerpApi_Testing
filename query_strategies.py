@@ -4,20 +4,6 @@ from dataclasses import dataclass
 from typing import Dict, List
 
 
-HIGH_QUALITY_SITE_LIST = [
-    "site:reuters.com",
-    "site:bloomberg.com",
-    "site:ft.com",
-    "site:wsj.com",
-    "site:cnbc.com",
-    "site:barrons.com",
-]
-
-PR_WIRE_SITES = [
-    "site:prnewswire.com",
-    "site:businesswire.com",
-]
-
 TERM_SETS = {
     "corporate_actions": [
         "earnings",
@@ -39,39 +25,53 @@ TERM_SETS = {
         "upgrade",
         "downgrade",
     ],
+    "exchange_filings": [
+        "annual report",
+        "quarterly results",
+        "press release",
+        "material fact",
+        "regulatory filing",
+        "prospectus",
+    ],
 }
 
+NOISE_EXCLUSIONS = "-site:instagram.com -site:youtube.com -site:reddit.com -site:tiktok.com -site:twitter.com -site:x.com"
+
 PLACEHOLDERS = {
-    "high_quality_sites": " OR ".join(HIGH_QUALITY_SITE_LIST),
-    "pr_wire_sites": " OR ".join(PR_WIRE_SITES),
-    "corporate_actions": " OR ".join(f'"{term}"' for term in TERM_SETS["corporate_actions"]),
-    "market_context": " OR ".join(f'"{term}"' for term in TERM_SETS["market_context"]),
+    "corporate_actions": " OR ".join(f'"{ term}"' for term in TERM_SETS["corporate_actions"]),
+    "market_context":    " OR ".join(f'"{ term}"' for term in TERM_SETS["market_context"]),
+    "exchange_filings":  " OR ".join(f'"{ term}"' for term in TERM_SETS["exchange_filings"]),
+    "noise_exclusions":  NOISE_EXCLUSIONS,
 }
 
 # Easy-to-edit search layer. Target terms come from ChatGPT; these decide how to use them.
 SEARCH_STRATEGIES = {
-    "broad_news": "{target}",
-    "announced": "{target} announced",
-    "source_whitelist": "{target} ({high_quality_sites} OR {pr_wire_sites})",
-    "pr_wires": "{target} ({pr_wire_sites})",
+    "broad_news":        "{target}",
+    "announced":         "{target} announced",
     "corporate_actions": "{target} ({corporate_actions})",
-    "market_context": "{target} ({market_context})",
+    "market_context":    "{target} ({market_context})",
+    "exchange_filings":  "{target} ({exchange_filings})",
+    "noise_filtered":    "{target} {noise_exclusions}",
 }
 
-# Route noisier target forms away from the broadest searches.
+# Route each target type to the search strategies most likely to yield signal.
+# source_whitelist and pr_wires removed — poor results for EM companies.
+# abbreviation_acronym removed from primary — too ambiguous, near-zero results.
 TARGET_STRATEGY_SEARCH_STRATEGIES = {
-    "primary_entity_name": ["broad_news", "source_whitelist", "corporate_actions", "announced"],
-    "existing_alias": ["broad_news", "source_whitelist", "corporate_actions"],
-    "official_exact_quote": ["broad_news", "source_whitelist", "corporate_actions", "announced"],
-    "official_unquoted": ["broad_news", "market_context", "announced"],
-    "short_common_name": ["market_context", "corporate_actions", "announced"],
-    "ticker_exchange": ["broad_news", "source_whitelist", "corporate_actions"],
-    "abbreviation_acronym": ["source_whitelist", "market_context"],
-    "partial_quote_disambiguation": ["broad_news", "corporate_actions", "announced"],
-    "local_language_name": ["broad_news", "announced"],
+    "official_unquoted":            ["corporate_actions", "announced", "exchange_filings"],
+    "partial_quote_disambiguation":  ["corporate_actions", "announced", "noise_filtered"],
+    "existing_alias":               ["corporate_actions", "announced", "broad_news"],
+    "official_exact_quote":         ["corporate_actions", "announced"],
+    "short_common_name":            ["corporate_actions", "market_context", "noise_filtered"],
+    "ticker_exchange":              ["broad_news", "corporate_actions", "announced"],
+    "local_language_name":          ["broad_news", "announced"],
+    "former_name":                  ["broad_news", "corporate_actions"],
+    # legacy / fallback
+    "primary_entity_name":          ["corporate_actions", "announced", "exchange_filings"],
+    "abbreviation_acronym":         ["corporate_actions", "noise_filtered"],
 }
 
-DEFAULT_SEARCH_STRATEGIES = ["broad_news", "source_whitelist", "corporate_actions"]
+DEFAULT_SEARCH_STRATEGIES = ["corporate_actions", "announced", "broad_news"]
 
 
 @dataclass(frozen=True)

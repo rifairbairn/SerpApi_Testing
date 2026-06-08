@@ -38,7 +38,7 @@ def _split_existing_names(existing_names: str) -> List[str]:
 
 def _looks_like_ticker_exchange(query: str) -> bool:
     return bool(
-        re.search(r"\b[A-Z0-9]{1,6}[.:][A-Z]{1,5}\b", query)
+        re.search(r"\b[A-Z0-9]{1,6}[.:]\s*[A-Z0-9]{1,10}\b", query)
         or re.search(r"\b[A-Z]{1,6}\s+(US|LN|HK|JP|GR|FP|SW|SS|SZ|KS|KL)\b", query)
     )
 
