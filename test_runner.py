@@ -262,7 +262,7 @@ def main() -> int:
     score_cache = load_score_cache(score_cache_path)
 
     db = DatabaseHandler(DATABASE)
-    analyser = ChatGPTAnalyser(model="gpt-4o-mini", scoring_model="gpt-4o-mini")
+    analyser = ChatGPTAnalyser(model="gpt-4o-mini", scoring_model="gpt-5-mini")
 
     positions = db.get_index_positions(TICKER, POS_DATE)
     if positions is None or positions.empty:
