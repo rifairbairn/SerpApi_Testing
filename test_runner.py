@@ -30,7 +30,7 @@ from article_score_cache import (
 )
 from chatgpt_handler import ChatGPTAnalyser, infer_target_strategy_type
 from database_handler import DatabaseHandler
-from query_strategies import build_strategy_queries
+from query_strategies import build_strategy_queries, ALL_SEARCH_STRATEGIES
 from search_name_cache import (
     get_cached_query_records,
     load_cache,
@@ -53,11 +53,19 @@ TOP_N_RESULTS = 25          # results to score per query (1 credit = 100 results
 SEARCH_ENGINE = "google"
 RANDOM_STATE = 42
 
+# TEST_MODE controls which queries are generated per company:
+#   "target_comparison" -- all target types x corporate_actions only
+#                          (tests name formulation quality, level playing field)
+#   "search_comparison" -- official_unquoted only x all search strategies
+#                          (tests search modifier quality, level playing field)
+#   "production"        -- best-known routing per target type
+TEST_MODE = "target_comparison"
+
 POS_DATE = (pd.Timestamp.today() - pd.offsets.MonthEnd(1)).strftime("%Y-%m-%d")
 SEARCH_START_DATE = (pd.Timestamp.today() - pd.offsets.MonthEnd(5)).strftime("%m/%d/%Y")
 SEARCH_END_DATE = pd.Timestamp.today().strftime("%m/%d/%Y")
 
-OUTPUT_FILENAME = "test_run_output.csv"
+OUTPUT_FILENAME = f"test_run_output_{TEST_MODE}.csv"
 NAME_CACHE_FILENAME = "chatgpt_company_target_cache.csv"
 SCORE_CACHE_FILENAME = "article_score_cache.csv"
 
@@ -298,7 +306,7 @@ def main() -> int:
             logging.warning("  No name strategies for %s - skipping.", company_name)
             continue
 
-        queries = build_strategy_queries(candidates)
+        queries = build_strategy_queries(candidates, mode=TEST_MODE)
         logging.info("  %d strategy queries generated.", len(queries))
 
         company_rows: List[Dict[str, Any]] = []
