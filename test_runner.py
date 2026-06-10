@@ -53,6 +53,12 @@ TOP_N_RESULTS = 25          # results to score per query (1 credit = 100 results
 SEARCH_ENGINE = "google"
 RANDOM_STATE = 42
 
+# Domains that produce auto-generated / templated content.
+# Articles from these domains are assigned a fixed low score without calling GPT.
+DOMAIN_LOW_SCORE: Dict[str, Dict[str, Any]] = {
+    "simplywall.st": {"subject": "No", "mentioned": "Yes", "relevance": 5, "usefulness": 0},
+}
+
 # TEST_MODE controls which queries are generated per company:
 #   "target_comparison" -- all target types x corporate_actions only
 #                          (tests name formulation quality, level playing field)
@@ -374,7 +380,15 @@ def main() -> int:
                 score = None
                 score_error = None
 
+                # Check domain blocklist before hitting GPT or cache
                 if link:
+                    _domain = link.split("/")[2].lower().replace("www.", "") if "//" in link else ""
+                    _blocked = DOMAIN_LOW_SCORE.get(_domain)
+                    if _blocked:
+                        score = _blocked
+                        logging.info("    [blocked domain: %s] %s", _domain, link)
+
+                if score is None and link:
                     score = get_cached_score(score_cache, link, company_name)
                     if score:
                         logging.info("    [cached] %s", link)

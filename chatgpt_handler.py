@@ -375,7 +375,11 @@ class ChatGPTAnalyser:
             "  High (70-100): M&A, fraud/legal issues, dividend changes, buybacks, debt issuance,\n"
             "    major contracts, significant executive changes\n"
             "  Medium (30-69): Guidance updates, analyst rating changes, strategic announcements\n"
-            "  Low (0-29): Routine in-line earnings, minor price moves, general sector commentary\n\n"
+            "  Low (0-29): Routine in-line earnings, minor price moves, general sector commentary\n"
+            "  Very low (0-10): Auto-generated or templated content with no specific news event —\n"
+            "    e.g. titles framed as rhetorical questions about fundamentals ('Is [Company] financially\n"
+            "    healthy?', 'Should you buy [Company] today?', 'What does [Company]\\'s debt level mean\n"
+            "    for investors?'), or boilerplate data summaries not tied to any announcement.\n\n"
             "Return ONLY valid JSON: "
             '{"subject": "Yes"|"No", "mentioned": "Yes"|"No", "relevance": <0-100>, "usefulness": <0-100>}'
         )
