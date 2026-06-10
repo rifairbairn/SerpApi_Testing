@@ -5,3 +5,4 @@ __pycache__/
 *.pyc
 old_files/
 *.csv
+*.xlsx

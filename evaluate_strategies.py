@@ -180,7 +180,7 @@ def view_per_company(df: pd.DataFrame) -> pd.DataFrame:
                ].sort_values("avg_relevance", ascending=False)
 
 
-def view_source_quality(df: pd.DataFrame, top_n: int = 30) -> pd.DataFrame:
+def view_source_quality(df: pd.DataFrame) -> pd.DataFrame:
     scored = df[df["has_score"]].copy()
     scored["domain"] = scored["Link"].str.extract(r"https?://(?:www\.)?([^/]+)")
     g = scored.groupby("domain")
@@ -198,7 +198,7 @@ def view_source_quality(df: pd.DataFrame, top_n: int = 30) -> pd.DataFrame:
     out["avg_relevance"]   = out["avg_relevance"].round(1)
     out["avg_usefulness"]  = out["avg_usefulness"].round(1)
     out["p75_relevance"]   = out["p75_relevance"].round(1)
-    return out.sort_values("avg_relevance", ascending=False).head(top_n)
+    return out.sort_values("avg_relevance", ascending=False)
 
 
 def view_query_rank_decay(df: pd.DataFrame) -> pd.DataFrame:
