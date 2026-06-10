@@ -10,24 +10,31 @@ Reads test_run_output.csv and produces ranked summaries of:
   6. Result rank decay
   7. Uniqueness -- what % of each strategy's useful results are exclusive to it
 
+Usage:
+  python evaluate_strategies.py                                  # reads test_run_output.csv
+  python evaluate_strategies.py test_run_output_target_comparison.csv
+  python evaluate_strategies.py test_run_output_search_comparison.csv
+
 Metrics:
-  - query_count     : unique queries run for this strategy group
-  - result_count    : total scored article rows
-  - results_per_q   : avg results returned per query
-  - hit_rate        : % GPT_Subject == Yes
-  - useful_hit_rate : % GPT_Relevance >= RELEVANCE_THRESHOLD
-  - avg_relevance   : mean GPT_Relevance
-  - avg_usefulness  : mean GPT_Usefulness
-  - p75_relevance   : 75th-percentile relevance
-  - unique_useful   : useful results not found by any other strategy (uniqueness view only)
-  - unique_useful_pct: unique_useful as % of that strategy's useful results
+  - query_count       : unique queries run for this strategy group
+  - result_count      : total scored article rows
+  - results_per_q     : avg results returned per query
+  - zero_result_rate  : % of queries returning 0 results from Google
+  - avg_total_results : mean Google result count per query
+  - hit_rate          : % GPT_Subject == Yes
+  - useful_hit_rate   : % GPT_Relevance >= RELEVANCE_THRESHOLD
+  - avg_relevance     : mean GPT_Relevance
+  - avg_usefulness    : mean GPT_Usefulness
+  - p75_relevance     : 75th-percentile relevance
+  - unique_useful     : useful results not found by any other strategy (uniqueness view only)
+  - unique_useful_pct : unique_useful as % of that strategy's useful results
 """
 
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
-from typing import Any
 
 import pandas as pd
 
@@ -38,8 +45,9 @@ import pandas as pd
 SCRIPT_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", str(SCRIPT_DIR)))
 
-INPUT_FILE = OUTPUT_DIR / "test_run_output.csv"
-OUTPUT_EXCEL = OUTPUT_DIR / "evaluate_strategies_output.xlsx"
+_input_name = sys.argv[1] if len(sys.argv) > 1 else "test_run_output.csv"
+INPUT_FILE = OUTPUT_DIR / _input_name
+OUTPUT_EXCEL = OUTPUT_DIR / (_input_name.replace(".csv", "_evaluated.xlsx"))
 
 RELEVANCE_THRESHOLD = 50
 
@@ -60,6 +68,7 @@ def load_data(path: Path) -> pd.DataFrame:
     df["has_score"]     = df["GPT_Relevance"].notna()
     df["has_error"]     = df["Search Error"].notna() | df["Score Error"].notna()
     df["url_norm"]      = df["Link"].str.split("?").str[0].str.lower().str.strip()
+    df["zero_results"]  = df["Total Results"].fillna(0) == 0
 
     return df
 
@@ -78,6 +87,20 @@ def _query_counts(df: pd.DataFrame, group_by: str | list[str]) -> pd.DataFrame:
     )
 
 
+def _result_volume(df: pd.DataFrame, group_by: str | list[str]) -> pd.DataFrame:
+    """Per-query volume stats computed at query level to avoid double-counting."""
+    cols = [group_by] if isinstance(group_by, str) else group_by
+    query_level = df.drop_duplicates(subset=cols + ["Query"]).copy()
+    g = query_level.groupby(cols)
+    vol = g.agg(
+        zero_result_rate  =("zero_results",  "mean"),
+        avg_total_results =("Total Results", "mean"),
+    ).reset_index()
+    vol["zero_result_rate"]  = (vol["zero_result_rate"] * 100).round(1)
+    vol["avg_total_results"] = vol["avg_total_results"].round(1)
+    return vol
+
+
 def build_metrics(df: pd.DataFrame, group_by: str | list[str]) -> pd.DataFrame:
     scored = df[df["has_score"]]
     g = scored.groupby(group_by)
@@ -91,8 +114,10 @@ def build_metrics(df: pd.DataFrame, group_by: str | list[str]) -> pd.DataFrame:
         p75_relevance   =("GPT_Relevance", lambda x: x.quantile(0.75)),
     ).reset_index()
 
-    qc = _query_counts(df, group_by)
-    out = out.merge(qc, on=group_by, how="left")
+    qc  = _query_counts(df, group_by)
+    vol = _result_volume(df, group_by)
+    out = out.merge(qc,  on=group_by, how="left")
+    out = out.merge(vol, on=group_by, how="left")
     out["results_per_q"] = (out["result_count"] / out["query_count"]).round(1)
 
     out["hit_rate"]        = (out["hit_rate"]        * 100).round(1)
@@ -103,6 +128,7 @@ def build_metrics(df: pd.DataFrame, group_by: str | list[str]) -> pd.DataFrame:
 
     cols = ([group_by] if isinstance(group_by, str) else group_by) + [
         "query_count", "result_count", "results_per_q",
+        "zero_result_rate", "avg_total_results",
         "hit_rate", "useful_hit_rate", "avg_relevance", "avg_usefulness", "p75_relevance",
     ]
     return out[cols].sort_values("avg_relevance", ascending=False)
@@ -136,8 +162,10 @@ def view_per_company(df: pd.DataFrame) -> pd.DataFrame:
         p75_relevance   =("GPT_Relevance", lambda x: x.quantile(0.75)),
     ).reset_index()
 
-    qc = _query_counts(df, ["Sedol", "Company Name"])
-    out = out.merge(qc, on=["Sedol", "Company Name"], how="left")
+    qc  = _query_counts(df, ["Sedol", "Company Name"])
+    vol = _result_volume(df, ["Sedol", "Company Name"])
+    out = out.merge(qc,  on=["Sedol", "Company Name"], how="left")
+    out = out.merge(vol, on=["Sedol", "Company Name"], how="left")
     out["results_per_q"] = (out["result_count"] / out["query_count"]).round(1)
 
     out["hit_rate"]        = (out["hit_rate"]        * 100).round(1)
@@ -147,6 +175,7 @@ def view_per_company(df: pd.DataFrame) -> pd.DataFrame:
     out["p75_relevance"]   = out["p75_relevance"].round(1)
 
     return out[["Sedol", "Company Name", "query_count", "result_count", "results_per_q",
+                "zero_result_rate", "avg_total_results",
                 "hit_rate", "useful_hit_rate", "avg_relevance", "avg_usefulness", "p75_relevance"]
                ].sort_values("avg_relevance", ascending=False)
 
@@ -188,10 +217,7 @@ def view_query_rank_decay(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def view_uniqueness(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    For each target strategy, how many of its useful results are NOT found
-    by any other target strategy? Sorted by unique_per_query (marginal yield).
-    """
+    """For each target strategy, how many of its useful results are unique to it?"""
     scored = df[df["has_score"]].copy()
     useful = scored[scored["is_useful_hit"]].copy()
 
