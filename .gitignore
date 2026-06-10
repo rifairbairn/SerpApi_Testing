@@ -3,3 +3,7 @@ __pycache__/
 .env
 .vscode/
 *.pyc
+old_files/
+data_files/
+*.csv
+*.xlsx
