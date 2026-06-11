@@ -48,7 +48,6 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 DATABASE = "RothkoFO"
 TICKER = "MS664220"
 MAX_COMPANIES = 50
-MAX_GPT_TARGET_CANDIDATES = 5
 TOP_N_RESULTS = 25          # results to score per query (1 credit = 100 results fetched)
 SEARCH_ENGINE = "google"
 RANDOM_STATE = 42
@@ -219,10 +218,8 @@ def _build_candidates(
     company_name = _safe_str(company_row.get("EntityName"))
     existing_names = _split_names(company_row.get("EntitySearchNames"))
 
+    # existing_alias always comes from the DB, not GPT
     candidates: List[Dict[str, str]] = []
-    if company_name:
-        candidates.append({"query": _quote(company_name), "strategy_type": "official_exact_quote"})
-        candidates.append({"query": company_name, "strategy_type": "official_unquoted"})
     for name in existing_names:
         candidates.append({"query": name, "strategy_type": "existing_alias"})
 
@@ -237,7 +234,6 @@ def _build_candidates(
                 suggestions = analyser.suggest_company_target_queries(
                     company_name,
                     existing_names="; ".join(existing_names),
-                    max_names=MAX_GPT_TARGET_CANDIDATES,
                 )
                 candidates.extend(suggestions)
                 if sedol and suggestions:
