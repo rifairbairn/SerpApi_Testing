@@ -218,8 +218,10 @@ def _build_candidates(
     company_name = _safe_str(company_row.get("EntityName"))
     existing_names = _split_names(company_row.get("EntitySearchNames"))
 
-    # existing_alias always comes from the DB, not GPT
     candidates: List[Dict[str, str]] = []
+    if company_name:
+        candidates.append({"query": _quote(company_name), "strategy_type": "official_exact_quote"})
+        candidates.append({"query": company_name, "strategy_type": "official_unquoted"})
     for name in existing_names:
         candidates.append({"query": name, "strategy_type": "existing_alias"})
 
