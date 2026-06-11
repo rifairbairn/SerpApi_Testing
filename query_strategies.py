@@ -82,7 +82,7 @@ ALL_SEARCH_STRATEGIES = list(SEARCH_STRATEGIES.keys())
 # TEST_MODE = "target_comparison"
 # Every target type gets the same single search strategy so name formulations
 # are compared on a level playing field.
-TARGET_COMPARISON_SEARCH = ["corporate_actions"]
+TARGET_COMPARISON_SEARCH = ["broad_news"]
 
 # TEST_MODE = "search_comparison"
 # official_unquoted only, paired with every search strategy so modifiers are

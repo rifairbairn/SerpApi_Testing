@@ -4,5 +4,6 @@ __pycache__/
 .vscode/
 *.pyc
 old_files/
+data_files/
 *.csv
 *.xlsx
