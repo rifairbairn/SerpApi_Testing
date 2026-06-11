@@ -47,11 +47,16 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 
 DATABASE = "RothkoFO"
 TICKER = "MS664220"
-MAX_COMPANIES = 2 #50
-MAX_GPT_TARGET_CANDIDATES = 5
+MAX_COMPANIES = 50
 TOP_N_RESULTS = 25          # results to score per query (1 credit = 100 results fetched)
 SEARCH_ENGINE = "google"
 RANDOM_STATE = 42
+
+# Domains that produce auto-generated / templated content.
+# Articles from these domains are assigned a fixed low score without calling GPT.
+DOMAIN_LOW_SCORE: Dict[str, Dict[str, Any]] = {
+    "simplywall.st": {"subject": "No", "mentioned": "Yes", "relevance": 5, "usefulness": 0},
+}
 
 # TEST_MODE controls which queries are generated per company:
 #   "target_comparison" -- all target types x corporate_actions only
@@ -213,10 +218,8 @@ def _build_candidates(
     company_name = _safe_str(company_row.get("EntityName"))
     existing_names = _split_names(company_row.get("EntitySearchNames"))
 
+    # existing_alias always comes from the DB, not GPT
     candidates: List[Dict[str, str]] = []
-    if company_name:
-        candidates.append({"query": _quote(company_name), "strategy_type": "official_exact_quote"})
-        candidates.append({"query": company_name, "strategy_type": "official_unquoted"})
     for name in existing_names:
         candidates.append({"query": name, "strategy_type": "existing_alias"})
 
@@ -231,7 +234,6 @@ def _build_candidates(
                 suggestions = analyser.suggest_company_target_queries(
                     company_name,
                     existing_names="; ".join(existing_names),
-                    max_names=MAX_GPT_TARGET_CANDIDATES,
                 )
                 candidates.extend(suggestions)
                 if sedol and suggestions:
@@ -374,7 +376,15 @@ def main() -> int:
                 score = None
                 score_error = None
 
+                # Check domain blocklist before hitting GPT or cache
                 if link:
+                    _domain = link.split("/")[2].lower().replace("www.", "") if "//" in link else ""
+                    _blocked = DOMAIN_LOW_SCORE.get(_domain)
+                    if _blocked:
+                        score = _blocked
+                        logging.info("    [blocked domain: %s] %s", _domain, link)
+
+                if score is None and link:
                     score = get_cached_score(score_cache, link, company_name)
                     if score:
                         logging.info("    [cached] %s", link)

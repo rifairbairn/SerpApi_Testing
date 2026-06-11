@@ -166,7 +166,7 @@ def upsert_query_cache_row(
     row = {
         "EntityID": entity_id,
         "EntityName": entity_name,
-        "SearchNames": json.dumps([item["query"] for item in _clean_query_records(search_queries)], ensure_ascii=False),
+        "SearchNames": json.dumps(_clean_query_records(search_queries), ensure_ascii=False),
         "Source": source,
         "CreatedAt": timestamp,
         "UpdatedAt": timestamp,
