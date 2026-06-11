@@ -216,33 +216,33 @@ def view_query_rank_decay(df: pd.DataFrame) -> pd.DataFrame:
     return out.sort_values("Result Rank")
 
 
-def view_uniqueness(df: pd.DataFrame) -> pd.DataFrame:
-    """For each target strategy, how many of its useful results are unique to it?"""
+def _uniqueness_view(df: pd.DataFrame, col: str) -> pd.DataFrame:
+    """Generic uniqueness: for each value of col, how many useful results are exclusive to it?"""
     scored = df[df["has_score"]].copy()
     useful = scored[scored["is_useful_hit"]].copy()
 
     url_strategies = (
-        useful.groupby(["url_norm", "Company Name"])["Target Strategy Type"]
+        useful.groupby(["url_norm", "Company Name"])[col]
         .apply(set)
         .reset_index()
-        .rename(columns={"Target Strategy Type": "found_by"})
+        .rename(columns={col: "found_by"})
     )
     useful = useful.merge(url_strategies, on=["url_norm", "Company Name"], how="left")
     useful["is_unique"] = useful["found_by"].apply(lambda s: len(s) == 1)
 
     rows = []
-    for strat, grp in useful.groupby("Target Strategy Type"):
+    for strat, grp in useful.groupby(col):
         total  = len(grp)
         unique = int(grp["is_unique"].sum())
-        qcount = df[df["Target Strategy Type"] == strat]["Query"].nunique()
+        qcount = df[df[col] == strat]["Query"].nunique()
         rows.append({
-            "Target Strategy Type": strat,
-            "query_count":          qcount,
-            "useful_results":       total,
-            "unique_useful":        unique,
-            "shared_useful":        total - unique,
-            "unique_useful_pct":    round(unique / total * 100, 1) if total else 0,
-            "unique_per_query":     round(unique / qcount, 2) if qcount else 0,
+            col:                   strat,
+            "query_count":         qcount,
+            "useful_results":      total,
+            "unique_useful":       unique,
+            "shared_useful":       total - unique,
+            "unique_useful_pct":   round(unique / total * 100, 1) if total else 0,
+            "unique_per_query":    round(unique / qcount, 2) if qcount else 0,
         })
 
     return (
@@ -250,6 +250,14 @@ def view_uniqueness(df: pd.DataFrame) -> pd.DataFrame:
         .sort_values("unique_per_query", ascending=False)
         .reset_index(drop=True)
     )
+
+
+def view_uniqueness(df: pd.DataFrame) -> pd.DataFrame:
+    return _uniqueness_view(df, "Target Strategy Type")
+
+
+def view_search_uniqueness(df: pd.DataFrame) -> pd.DataFrame:
+    return _uniqueness_view(df, "Search Strategy")
 
 
 # ---------------------------------------------------------------------------
@@ -290,6 +298,7 @@ def main() -> None:
         "Source Quality":    view_source_quality(df),
         "Result Rank Decay": view_query_rank_decay(df),
         "Uniqueness":        view_uniqueness(df),
+        "Search Uniqueness": view_search_uniqueness(df),
     }
 
     for title, table in views.items():
