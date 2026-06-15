@@ -48,9 +48,13 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 DATABASE = "RothkoFO"
 TICKER = "MS664220"
 MAX_COMPANIES = 50
-TOP_N_RESULTS = 25          # results to score per query (1 credit = 100 results fetched)
-SEARCH_ENGINE = "google"
+TOP_N_RESULTS = 50
 RANDOM_STATE = 42
+
+# Search engine type:
+#   "google_news" — engine=google_news, up to 100 results, 1 credit per query
+#   "google_nws"  — engine=google + tbm=nws, 10 results per page, TOP_N_RESULTS/10 credits per query
+SEARCH_ENGINE_TYPE = "google_news"
 
 # Domains that produce auto-generated / templated content.
 # Articles from these domains are assigned a fixed low score without calling GPT.
@@ -64,13 +68,13 @@ DOMAIN_LOW_SCORE: Dict[str, Dict[str, Any]] = {
 #   "search_comparison" -- official_unquoted only x all search strategies
 #                          (tests search modifier quality, level playing field)
 #   "production"        -- best-known routing per target type
-TEST_MODE = "target_comparison"
+TEST_MODE = "engine_comparison"
 
 POS_DATE = (pd.Timestamp.today() - pd.offsets.MonthEnd(1)).strftime("%Y-%m-%d")
 SEARCH_START_DATE = (pd.Timestamp.today() - pd.offsets.MonthEnd(5)).strftime("%m/%d/%Y")
 SEARCH_END_DATE = pd.Timestamp.today().strftime("%m/%d/%Y")
 
-OUTPUT_FILENAME = f"test_run_output_{TEST_MODE}.csv"
+OUTPUT_FILENAME = f"test_run_output_{TEST_MODE}_{SEARCH_ENGINE_TYPE}.csv"
 NAME_CACHE_FILENAME = "chatgpt_company_target_cache.csv"
 SCORE_CACHE_FILENAME = "article_score_cache.csv"
 
@@ -93,6 +97,7 @@ OUTPUT_COLUMNS = [
     "GPT_Mentioned",
     "GPT_Relevance",
     "GPT_Usefulness",
+    "Search Engine",
     "Search Error",
     "Score Error",
 ]
@@ -327,9 +332,10 @@ def main() -> int:
             try:
                 news_results = run_news_search(
                     query=sq.query,
-                    search_engine=SEARCH_ENGINE,
+                    search_engine=SEARCH_ENGINE_TYPE,
                     search_start_date=SEARCH_START_DATE,
                     search_end_date=SEARCH_END_DATE,
+                    top_n=TOP_N_RESULTS,
                 )
             except Exception as exc:
                 logging.error("  SerpAPI error: %s", exc)
@@ -344,6 +350,7 @@ def main() -> int:
                         "Search Strategy": sq.search_strategy,
                         "Result Rank": None,
                         "Total Results": None,
+                        "Search Engine": SEARCH_ENGINE_TYPE,
                         "Search Error": str(exc),
                     }
                 )
@@ -362,6 +369,7 @@ def main() -> int:
                         "Search Strategy": sq.search_strategy,
                         "Result Rank": None,
                         "Total Results": 0,
+                        "Search Engine": SEARCH_ENGINE_TYPE,
                         "Search Error": None,
                     }
                 )
@@ -426,6 +434,7 @@ def main() -> int:
                         "GPT_Mentioned": score.get("mentioned") if isinstance(score, dict) else None,
                         "GPT_Relevance": score.get("relevance") if isinstance(score, dict) else None,
                         "GPT_Usefulness": score.get("usefulness") if isinstance(score, dict) else None,
+                        "Search Engine": SEARCH_ENGINE_TYPE,
                         "Search Error": None,
                         "Score Error": score_error,
                     }

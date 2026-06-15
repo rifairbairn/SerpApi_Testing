@@ -79,6 +79,11 @@ ALL_SEARCH_STRATEGIES = list(SEARCH_STRATEGIES.keys())
 # Routing tables
 # ---------------------------------------------------------------------------
 
+# TEST_MODE = "engine_comparison"
+# official_unquoted only x broad_news only — isolates engine as the sole variable.
+ENGINE_COMPARISON_TARGET = "official_unquoted"
+ENGINE_COMPARISON_SEARCH = ["broad_news"]
+
 # TEST_MODE = "target_comparison"
 # Every target type gets the same single search strategy so name formulations
 # are compared on a level playing field.
@@ -167,7 +172,12 @@ def build_strategy_queries(
             target.get("strategy_type") or target.get("strategy")
         )
 
-        if mode == "target_comparison":
+        if mode == "engine_comparison":
+            if target_strategy_type != ENGINE_COMPARISON_TARGET:
+                continue
+            search_strategies = ENGINE_COMPARISON_SEARCH
+
+        elif mode == "target_comparison":
             search_strategies = TARGET_COMPARISON_SEARCH
 
         elif mode == "search_comparison":
