@@ -260,6 +260,65 @@ def view_search_uniqueness(df: pd.DataFrame) -> pd.DataFrame:
     return _uniqueness_view(df, "Search Strategy")
 
 
+def view_marginal_value(df: pd.DataFrame, baseline_path: Path | None = None) -> pd.DataFrame:
+    """
+    For each (Target Strategy Type x Search Strategy) combination, compute how many
+    useful results it adds ON TOP of the official_unquoted + broad_news baseline.
+
+    If baseline_path is provided, loads that CSV and unions it with df before
+    computing the baseline URL set. Otherwise uses the broad_news rows within df itself.
+
+    Columns: target, search, query_count, useful_results, new_useful,
+             shared_useful, new_useful_pct, new_per_query
+    """
+    if baseline_path is not None and Path(baseline_path).exists():
+        baseline_df = load_data(Path(baseline_path))
+        combined    = pd.concat([df, baseline_df], ignore_index=True)
+    else:
+        combined = df
+
+    scored  = combined[combined["has_score"]].copy()
+    useful  = scored[scored["is_useful_hit"]].copy()
+
+    # URLs already found by the baseline strategy
+    baseline_mask = (
+        (useful["Target Strategy Type"] == "official_unquoted") &
+        (useful["Search Strategy"]       == "broad_news")
+    )
+    baseline_urls = set(
+        useful[baseline_mask]
+        .apply(lambda r: (r["url_norm"], r["Company Name"]), axis=1)
+    )
+
+    rows = []
+    for (tgt, srch), grp in useful.groupby(["Target Strategy Type", "Search Strategy"]):
+        is_baseline = (tgt == "official_unquoted" and srch == "broad_news")
+        total   = len(grp)
+        new     = int(grp.apply(
+            lambda r: (r["url_norm"], r["Company Name"]) not in baseline_urls, axis=1
+        ).sum())
+        # query count from full df (includes zero-result queries)
+        qcount  = df[
+            (df["Target Strategy Type"] == tgt) & (df["Search Strategy"] == srch)
+        ]["Query"].nunique()
+        rows.append({
+            "Target Strategy Type": tgt,
+            "Search Strategy":      srch,
+            "query_count":          qcount,
+            "useful_results":       total,
+            "new_useful":           new if not is_baseline else total,
+            "shared_useful":        total - new if not is_baseline else 0,
+            "new_useful_pct":       round((new / total * 100) if total else 0, 1),
+            "new_per_query":        round((new / qcount) if qcount else 0, 2),
+        })
+
+    return (
+        pd.DataFrame(rows)
+        .sort_values("new_per_query", ascending=False)
+        .reset_index(drop=True)
+    )
+
+
 # ---------------------------------------------------------------------------
 # Print helpers
 # ---------------------------------------------------------------------------
@@ -290,6 +349,10 @@ def main() -> None:
     print(f"\nLoaded {total_rows:,} rows | {scored_rows:,} scored | "
           f"{error_rows} errors | {companies} companies | {uniq_queries} unique queries")
 
+    # Optional baseline for marginal value analysis (complement_test workflow)
+    _baseline_name = os.getenv("BASELINE_FILE", "")
+    _baseline_path = (OUTPUT_DIR / _baseline_name) if _baseline_name else None
+
     views = {
         "Target Strategy":   view_target_strategy(df),
         "Search Strategy":   view_search_strategy(df),
@@ -299,6 +362,7 @@ def main() -> None:
         "Result Rank Decay": view_query_rank_decay(df),
         "Uniqueness":        view_uniqueness(df),
         "Search Uniqueness": view_search_uniqueness(df),
+        "Marginal Value":    view_marginal_value(df, _baseline_path),
     }
 
     for title, table in views.items():

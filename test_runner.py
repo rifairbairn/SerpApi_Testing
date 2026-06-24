@@ -49,7 +49,7 @@ DATABASE = "RothkoFO"
 TICKER = "MS664220"
 MAX_COMPANIES = 50
 TOP_N_RESULTS = 50
-RANDOM_STATE = 42
+RANDOM_STATE = 20
 
 # Search engine type:
 #   "google_news" — engine=google_news, up to 100 results, 1 credit per query
@@ -68,7 +68,7 @@ DOMAIN_LOW_SCORE: Dict[str, Dict[str, Any]] = {
 #   "search_comparison" -- official_unquoted only x all search strategies
 #                          (tests search modifier quality, level playing field)
 #   "production"        -- best-known routing per target type
-TEST_MODE = "engine_comparison"
+TEST_MODE = "complement_test"
 
 POS_DATE = (pd.Timestamp.today() - pd.offsets.MonthEnd(1)).strftime("%Y-%m-%d")
 SEARCH_START_DATE = (pd.Timestamp.today() - pd.offsets.MonthEnd(5)).strftime("%m/%d/%Y")
