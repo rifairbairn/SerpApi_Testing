@@ -260,17 +260,32 @@ def view_search_uniqueness(df: pd.DataFrame) -> pd.DataFrame:
     return _uniqueness_view(df, "Search Strategy")
 
 
-def view_marginal_value(df: pd.DataFrame, baseline_path: Path | None = None) -> pd.DataFrame:
+def view_marginal_value(
+    df: pd.DataFrame,
+    baseline_path: Path | None = None,
+    baseline_strategies: list | None = None,
+) -> pd.DataFrame:
     """
     For each (Target Strategy Type x Search Strategy) combination, compute how many
-    useful results it adds ON TOP of the official_unquoted + broad_news baseline.
+    useful results it adds ON TOP of a combined baseline.
+
+    baseline_strategies: list of (target_strategy_type, search_strategy) tuples that
+        form the baseline. Defaults to [("official_unquoted", "broad_news")].
+        Example for a 2-query baseline:
+            [("official_unquoted", "broad_news"),
+             ("partial_quote_disambiguation", "broad_news")]
 
     If baseline_path is provided, loads that CSV and unions it with df before
-    computing the baseline URL set. Otherwise uses the broad_news rows within df itself.
+    computing the baseline URL set.
 
     Columns: target, search, query_count, useful_results, new_useful,
              shared_useful, new_useful_pct, new_per_query
     """
+    if baseline_strategies is None:
+        baseline_strategies = [("official_unquoted", "broad_news")]
+
+    baseline_set = set(baseline_strategies)
+
     if baseline_path is not None and Path(baseline_path).exists():
         baseline_df = load_data(Path(baseline_path))
         combined    = pd.concat([df, baseline_df], ignore_index=True)
@@ -280,10 +295,10 @@ def view_marginal_value(df: pd.DataFrame, baseline_path: Path | None = None) -> 
     scored  = combined[combined["has_score"]].copy()
     useful  = scored[scored["is_useful_hit"]].copy()
 
-    # URLs already found by the baseline strategy
-    baseline_mask = (
-        (useful["Target Strategy Type"] == "official_unquoted") &
-        (useful["Search Strategy"]       == "broad_news")
+    # URLs already found by any of the baseline strategies
+    baseline_mask = useful.apply(
+        lambda r: (r["Target Strategy Type"], r["Search Strategy"]) in baseline_set,
+        axis=1,
     )
     baseline_urls = set(
         useful[baseline_mask]
@@ -292,7 +307,7 @@ def view_marginal_value(df: pd.DataFrame, baseline_path: Path | None = None) -> 
 
     rows = []
     for (tgt, srch), grp in useful.groupby(["Target Strategy Type", "Search Strategy"]):
-        is_baseline = (tgt == "official_unquoted" and srch == "broad_news")
+        is_baseline = (tgt, srch) in baseline_set
         total   = len(grp)
         new     = int(grp.apply(
             lambda r: (r["url_norm"], r["Company Name"]) not in baseline_urls, axis=1
@@ -363,6 +378,13 @@ def main() -> None:
         "Uniqueness":        view_uniqueness(df),
         "Search Uniqueness": view_search_uniqueness(df),
         "Marginal Value":    view_marginal_value(df, _baseline_path),
+        "Marginal Value (2Q)": view_marginal_value(
+            df, _baseline_path,
+            baseline_strategies=[
+                ("official_unquoted",            "broad_news"),
+                ("partial_quote_disambiguation",  "broad_news"),
+            ],
+        ),
     }
 
     for title, table in views.items():
