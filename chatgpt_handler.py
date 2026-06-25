@@ -199,74 +199,57 @@ class ChatGPTAnalyser:
             logging.error(f"Unexpected error: {e}")
             return None
 
-    # Ordered list of all target strategy types GPT is asked to produce.
-    TARGET_STRATEGY_TYPES = [
-        "official_exact_quote",
-        "official_unquoted",
-        "partial_quote_disambiguation",
-        "ticker_exchange",
-        "abbreviation_acronym",
-        "local_language_name",
-        "short_common_name",
-        "former_name",
-    ]
-
     def suggest_company_target_queries(self, company_name: str, existing_names: str = "") -> List[Dict[str, str]]:
         """
-        Return one search query per target strategy type, or nothing for that type if it
-        does not apply. Returns a list of {query, strategy_type} dicts for applicable types only.
+        Ask GPT to consider all 8 target strategy types and return the best 5 that apply,
+        with an explicit strategy_type per query.
+        official_exact_quote and official_unquoted are hardcoded by the caller, but GPT
+        may still return them — duplicates are filtered in _build_candidates.
         """
         try:
             prompt = (
-                "Generate one financial-news search query per strategy type for the company below.\n"
-                "Return null for any type that does not apply — do NOT invent a query.\n\n"
+                "Generate search queries for financial news retrieval for the company below.\n\n"
 
                 f"Primary company name: {company_name}\n"
                 f"Existing aliases / identifiers: {existing_names}\n\n"
 
-                "Strategy types — return exactly one query or null for each:\n\n"
+                "Consider each of the following 8 formulation types, produce one candidate "
+                "per type where it applies, then return the best 5 most likely to retrieve "
+                "relevant financial news. Skip types that do not apply.\n\n"
 
-                "official_exact_quote   : Full official name in double quotes.\n"
-                "                         e.g. \"Pt Adaro Andalan Indonesia Tbk\"\n"
-                "official_unquoted      : Full official name, no quotes.\n"
-                "                         e.g. Pt Adaro Andalan Indonesia Tbk\n"
-                "partial_quote_disambiguation : Short distinctive name in quotes + brief context outside.\n"
-                "                         e.g. \"Adaro Andalan\" Indonesia coal\n"
-                "                         null if the short name is already unique without context.\n"
-                "ticker_exchange        : Exchange:Ticker format.\n"
-                "                         e.g. IDX: AADI  |  NSE: ULTRACEMCO  |  KOSDAQ: 079160\n"
-                "                         null if ticker/exchange is unknown.\n"
-                "abbreviation_acronym   : Recognised acronym or abbreviation used in financial media.\n"
-                "                         e.g. ULTRACEMCO  |  TCS  |  HDFC\n"
-                "                         null if no widely used acronym exists.\n"
-                "local_language_name    : Native-script name for non-English companies.\n"
-                "                         e.g. 아모레퍼시픽  |  中国平安\n"
-                "                         null for English-language companies.\n"
-                "short_common_name      : Well-known shortened name used in media coverage,\n"
-                "                         different from both the full name and any acronym.\n"
-                "                         e.g. UltraTech  |  Adaro  |  Kasikorn Bank\n"
-                "                         null if the short name is essentially the same as the official name.\n"
-                "former_name            : Previous official name if the company rebranded and the old\n"
-                "                         name still appears in recent news coverage.\n"
-                "                         e.g. Facebook (for Meta)  |  Kraft (for Mondelez)\n"
-                "                         null if no relevant former name exists.\n\n"
+                "Formulation types:\n"
+                "1. official_exact_quote   — Full official name in double quotes.\n"
+                '   e.g. "Pt Adaro Andalan Indonesia Tbk"\n'
+                "2. official_unquoted      — Full official name, no quotes.\n"
+                "   e.g. Pt Adaro Andalan Indonesia Tbk\n"
+                "3. partial_quote_disambiguation — Short name in quotes + brief context to resolve ambiguity.\n"
+                '   e.g. "Adaro Andalan" Indonesia coal  |  "Hanwha Life" Korea insurance\n'
+                "   Use whenever the short name could match other companies or topics.\n"
+                "4. ticker_exchange        — Exchange:Ticker format.\n"
+                "   e.g. IDX: AADI  |  NSE: ULTRACEMCO  |  KOSDAQ: 079160\n"
+                "   Skip if ticker/exchange is unknown.\n"
+                "5. abbreviation_acronym   — Recognised acronym used in financial media.\n"
+                "   e.g. ULTRACEMCO  |  TCS  |  PKN\n"
+                "   Skip if none exists.\n"
+                "6. local_language_name    — Native-script name for non-English companies.\n"
+                "   e.g. 아모레퍼시픽  |  中国平安\n"
+                "   Skip for English-language companies.\n"
+                "7. short_common_name      — Well-known shortened name used in media.\n"
+                "   e.g. UltraTech  |  Adaro  |  DiGi\n"
+                "   Skip if no well-known short form exists.\n"
+                "8. former_name            — Previous official name still appearing in recent news.\n"
+                "   e.g. Facebook (for Meta)\n"
+                "   Skip if no relevant former name exists.\n\n"
 
                 "Hard rules:\n"
-                "- Never append 'stock', 'shares', 'price', 'chart', 'Q2', 'FY26', or any year.\n"
+                "- Never append 'stock', 'shares', 'price', 'chart', year numbers, or quarter codes.\n"
                 "- Quoted phrases: maximum 4 words inside quotes.\n"
-                "- Use null, not an empty string, for non-applicable types.\n\n"
+                "- Avoid near-duplicates.\n\n"
 
-                "Return ONLY valid JSON with exactly these 8 keys:\n"
-                "{\n"
-                '  "official_exact_quote": "...",\n'
-                '  "official_unquoted": "...",\n'
-                '  "partial_quote_disambiguation": "..." or null,\n'
-                '  "ticker_exchange": "..." or null,\n'
-                '  "abbreviation_acronym": "..." or null,\n'
-                '  "local_language_name": "..." or null,\n'
-                '  "short_common_name": "..." or null,\n'
-                '  "former_name": "..." or null\n'
-                "}"
+                "Return ONLY valid JSON:\n"
+                '{"queries": [{"query": "...", "strategy_type": "<type_name>"}, ...]}\n\n'
+
+                "Return exactly 5 queries (fewer only if fewer than 5 types apply)."
             )
 
             chatgpt_output = self._request_chat_completion(prompt)
@@ -274,17 +257,18 @@ class ChatGPTAnalyser:
                 return []
 
             payload = self._parse_json_response(chatgpt_output)
-            if not isinstance(payload, dict):
+            queries = payload.get("queries", [])
+            if not isinstance(queries, list):
                 return []
 
             results = []
             seen: set = set()
-            for strategy_type in self.TARGET_STRATEGY_TYPES:
-                raw = payload.get(strategy_type)
-                if not raw or not isinstance(raw, str):
+            for item in queries:
+                if not isinstance(item, dict):
                     continue
-                query = " ".join(raw.split()).strip()
-                if not query:
+                query = " ".join(str(item.get("query", "")).split()).strip()
+                strategy_type = str(item.get("strategy_type", "")).strip()
+                if not query or not strategy_type:
                     continue
                 key = query.lower()
                 if key in seen:
@@ -292,7 +276,7 @@ class ChatGPTAnalyser:
                 seen.add(key)
                 results.append({"query": query, "strategy_type": strategy_type})
 
-            return results
+            return results[:5]
 
         except json.JSONDecodeError as e:
             logging.error("JSON parsing error while suggesting company target queries: %s", e)

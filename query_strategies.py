@@ -11,15 +11,20 @@ from typing import Dict, List
 TERM_SETS = {
     "corporate_actions": [
         # Earnings & results
-        "earnings", "results", "profit", "revenue",
+        "earnings", "results",
         # Distributions
         "dividend", "buyback", "repurchase",
         # M&A & structure
-        "merger", "acquisition", "takeover", "spin-off", "demerger", "restructuring",
+        "merger", "acquisition", "takeover",
         # Capital markets
-        "offering", "rights issue", "bond", "debt issuance", "listing",
+        "offering", "rights issue",
         # Legal & regulatory
-        "lawsuit", "fine", "investigation", "penalty",
+        "lawsuit", "investigation", "fine",
+    ],
+    "market_context": [
+        "analyst", "rating", "upgrade", "downgrade",
+        "guidance", "outlook", "forecast", "price target", "recommendation",
+        "CEO", "CFO", "appointed", "resigned",
     ],
     "analyst_coverage": [
         "analyst", "rating", "price target", "recommendation",
@@ -47,6 +52,7 @@ SOURCE_WHITELIST = (
 
 PLACEHOLDERS = {
     "corporate_actions": " OR ".join(f'"{t}"' for t in TERM_SETS["corporate_actions"]),
+    "market_context":    " OR ".join(f'"{t}"' for t in TERM_SETS["market_context"]),
     "analyst_coverage":  " OR ".join(f'"{t}"' for t in TERM_SETS["analyst_coverage"]),
     "management_change": " OR ".join(f'"{t}"' for t in TERM_SETS["management_change"]),
     "exchange_filings":  " OR ".join(f'"{t}"' for t in TERM_SETS["exchange_filings"]),
@@ -65,6 +71,7 @@ SEARCH_STRATEGIES = {
     "noise_filtered":    "{target} {noise_exclusions}",
     # Term-filtered
     "corporate_actions": "{target} ({corporate_actions})",
+    "market_context":    "{target} ({market_context})",
     "analyst_coverage":  "{target} ({analyst_coverage})",
     "management_change": "{target} ({management_change})",
     "exchange_filings":  "{target} ({exchange_filings})",
@@ -78,6 +85,22 @@ ALL_SEARCH_STRATEGIES = list(SEARCH_STRATEGIES.keys())
 # ---------------------------------------------------------------------------
 # Routing tables
 # ---------------------------------------------------------------------------
+
+# TEST_MODE = "engine_comparison"
+# official_unquoted only x broad_news only — isolates engine as the sole variable.
+ENGINE_COMPARISON_TARGET = "official_unquoted"
+ENGINE_COMPARISON_SEARCH = ["broad_news"]
+
+# TEST_MODE = "complement_test"
+# 4 target strategies x 5 search strategies on google_news.
+# Finds which (target x search) combination adds most on top of official_unquoted + broad_news.
+COMPLEMENT_TEST_TARGETS = {
+    "official_unquoted", "partial_quote_disambiguation",
+    "official_exact_quote", "existing_alias",
+}
+COMPLEMENT_TEST_SEARCH = [
+    "broad_news", "announced", "corporate_actions", "market_context", "source_whitelist",
+]
 
 # TEST_MODE = "target_comparison"
 # Every target type gets the same single search strategy so name formulations
@@ -167,7 +190,17 @@ def build_strategy_queries(
             target.get("strategy_type") or target.get("strategy")
         )
 
-        if mode == "target_comparison":
+        if mode == "engine_comparison":
+            if target_strategy_type != ENGINE_COMPARISON_TARGET:
+                continue
+            search_strategies = ENGINE_COMPARISON_SEARCH
+
+        elif mode == "complement_test":
+            if target_strategy_type not in COMPLEMENT_TEST_TARGETS:
+                continue
+            search_strategies = COMPLEMENT_TEST_SEARCH
+
+        elif mode == "target_comparison":
             search_strategies = TARGET_COMPARISON_SEARCH
 
         elif mode == "search_comparison":
