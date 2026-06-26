@@ -148,6 +148,12 @@ def _run_google_news(
         raise RuntimeError(f"SerpAPI error: {results['error']}")
 
     raw = results.get("news_results", [])
+
+    # Debug - remove after inspection
+    import json
+    with open("raw_google_news_debug.json", "w", encoding="utf-8") as f:
+        json.dump(raw[:3], f, indent=2, ensure_ascii=False)
+
     articles = _flatten_google_news_results(raw)
 
     if not articles:
